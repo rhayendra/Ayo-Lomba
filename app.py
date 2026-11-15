@@ -8,10 +8,15 @@ from functools import wraps
 from io import BytesIO
 from flask import Flask, render_template, request, jsonify, send_file, session
 
-app = Flask(__name__)
-app.secret_key = os.environ.get('AYO_LOMBA_SECRET') or secrets.token_hex(24)
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, 'templates'),
+    static_folder=os.path.join(BASE_DIR, 'static'),
+    static_url_path='/static'
+)
+app.secret_key = os.environ.get('AYO_LOMBA_SECRET') or secrets.token_hex(24)
 READONLY_DB_PATH = os.path.join(BASE_DIR, 'data', 'db.json')
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
 
