@@ -467,13 +467,67 @@ def participant_login():
     return jsonify(ctx)
 
 
+def get_all_panitia():
+    """Menggabungkan akun panitia dari db.json dengan akun dari Vercel Environment Variables."""
+    data = load_data()
+    panitia_list = list(data.get('panitia', []))
+    existing_ids = {p.get('id', '').upper() for p in panitia_list}
+
+    # 1. Cek dari VERCEL Key: PANITIA_ID dan PANITIA_PASSWORD (paling simpel)
+    env_id = os.environ.get('PANITIA_ID', '').strip()
+    env_pw = os.environ.get('PANITIA_PASSWORD', '').strip()
+    if env_id and env_pw:
+        env_name = os.environ.get('PANITIA_NAME', 'Admin Utama Vercel').strip()
+        env_role = os.environ.get('PANITIA_ROLE', 'Super Admin').strip()
+        # Jika id sudah ada di list, update passwordnya dari key vercel
+        matched = next((p for p in panitia_list if p.get('id', '').upper() == env_id.upper()), None)
+        if matched:
+            matched['password'] = env_pw
+            matched['name'] = env_name
+            matched['role'] = env_role
+        else:
+            panitia_list.append({
+                "id": env_id,
+                "name": env_name,
+                "password": env_pw,
+                "role": env_role
+            })
+            existing_ids.add(env_id.upper())
+
+    # 2. Cek dari VERCEL Key: PANITIA_ADMINS (format: ID:PASSWORD:NAMA:JABATAN,ID2:PW2...)
+    env_admins = os.environ.get('PANITIA_ADMINS', '').strip()
+    if env_admins:
+        entries = env_admins.split(',')
+        for entry in entries:
+            parts = [p.strip() for p in entry.split(':')]
+            if len(parts) >= 2:
+                p_id = parts[0]
+                p_pw = parts[1]
+                p_name = parts[2] if len(parts) > 2 else f"Panitia {p_id}"
+                p_role = parts[3] if len(parts) > 3 else "Panitia Lomba"
+                matched = next((p for p in panitia_list if p.get('id', '').upper() == p_id.upper()), None)
+                if matched:
+                    matched['password'] = p_pw
+                    matched['name'] = p_name
+                    matched['role'] = p_role
+                else:
+                    panitia_list.append({
+                        "id": p_id,
+                        "name": p_name,
+                        "password": p_pw,
+                        "role": p_role
+                    })
+
+    return panitia_list
+
+
 @app.route('/api/panitia/me')
 def panitia_me():
     panitia_id = session.get('panitia_id')
     if not panitia_id:
         return jsonify({"authenticated": False})
-    data = load_data()
-    found = next((p for p in data.get('panitia', []) if p['id'] == panitia_id), None)
+    panitia_list = get_all_panitia()
+    found = next((p for p in panitia_list if p['id'].upper() == panitia_id.upper()), None)
     if not found:
         session.pop('panitia_id', None)
         return jsonify({"authenticated": False})
@@ -493,9 +547,9 @@ def panitia_login():
     panitia_id = (payload.get('id') or '').strip().upper()
     password = (payload.get('password') or '').strip()
 
-    data = load_data()
+    panitia_list = get_all_panitia()
     found = next(
-        (p for p in data.get('panitia', []) if (p.get('id') or '').upper() == panitia_id and p.get('password') == password),
+        (p for p in panitia_list if (p.get('id') or '').upper() == panitia_id and p.get('password') == password),
         None
     )
 
